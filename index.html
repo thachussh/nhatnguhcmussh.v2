@@ -1,0 +1,585 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chia Túi Bài Thi Theo Phòng - USSH HCM</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-4 max-w-7xl">
+        <h1 class="text-2xl font-bold text-center text-purple-800 mb-6">
+            Chia Túi Bài Thi Theo Phòng - USSH HCM
+        </h1>
+        <p class="text-center text-gray-600 mb-8">
+            Hệ thống gộp nhiều phòng thi thành các túi 200 bài với 2 phương án xử lý
+        </p>
+
+        <!-- Tabs for Method Selection -->
+        <div class="flex justify-center mb-6">
+            <button onclick="showMethod('method1')" class="px-4 py-2 bg-purple-600 text-white rounded-l-md hover:bg-purple-700">
+                Phương án 1: Nhập từng phòng
+            </button>
+            <button onclick="showMethod('method2')" class="px-4 py-2 bg-purple-600 text-white rounded-r-md hover:bg-purple-700">
+                Phương án 2: Nhập mã phách vắng
+            </button>
+        </div>
+
+        <!-- Method 1: Individual Room Input -->
+        <div id="method1" class="space-y-6">
+            <!-- Import/Paste Section -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h2 class="text-lg font-semibold text-purple-800 mb-4">Nhập dữ liệu từ Excel hoặc Copy-Paste</h2>
+                <div class="space-y-4">
+                    <!-- Excel Upload -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Tải lên file Excel</label>
+                        <input type="file" id="excelFile" accept=".xlsx,.xls" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <p class="text-xs text-gray-500 mt-1">Chấp nhận file .xlsx, .xls với 4 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng</p>
+                    </div>
+                    
+                    <!-- Copy-Paste Area -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Hoặc copy-paste dữ liệu từ Excel</label>
+                        <textarea id="pasteData" rows="6" placeholder="Dán dữ liệu từ Excel vào đây (4 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng)
+Ví dụ:
+A101    801     1000    10
+A201    1001    1045    3
+A202    1046    1085    2
+A203    1086    1125    0"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y font-mono text-sm"></textarea>
+                    </div>
+                    
+                    <!-- Import Buttons -->
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="importExcel()" class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Nhập từ Excel
+                        </button>
+                        <button onclick="importPasteData()" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            Nhập dữ liệu đã paste
+                        </button>
+                        <button onclick="clearAllRooms()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Xóa tất cả
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Room Input -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h2 class="text-lg font-semibold text-blue-800 mb-4">Thêm phòng thi thủ công</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tên phòng</label>
+                        <input type="text" id="roomName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: A201">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã phách đầu</label>
+                        <input type="number" id="startId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã phách cuối</label>
+                        <input type="number" id="endId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1045">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Số thí sinh vắng</label>
+                        <input type="number" id="absentCount" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 3">
+                    </div>
+                </div>
+                <button onclick="addRoom()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Thêm phòng
+                </button>
+            </div>
+
+            <!-- Room List -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h2 class="text-lg font-semibold text-blue-800 mb-4">Danh sách phòng thi</h2>
+                <div id="roomList" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- Method 2: Absent IDs Input -->
+        <div id="method2" class="space-y-6 hidden">
+            <!-- General Information -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h2 class="text-lg font-semibold text-blue-800 mb-4">Thông tin tổng quát</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã phách đầu (toàn bộ)</label>
+                        <input type="number" id="overallStartId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã phách cuối (toàn bộ)</label>
+                        <input type="number" id="overallEndId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1125">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Absent IDs -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border">
+                <h2 class="text-lg font-semibold text-blue-800 mb-4">Mã phách thí sinh vắng mặt</h2>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Nhập danh sách mã phách (cách nhau bằng dấu phẩy, xuống dòng, hoặc khoảng trắng)</label>
+                    <textarea id="absentIds" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y font-mono text-sm" placeholder="VD: 1020, 1030, 1040"></textarea>
+                </div>
+                <button onclick="processAbsentIds()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Xử lý danh sách
+                </button>
+            </div>
+        </div>
+
+        <!-- Calculate Bags -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border">
+            <button onclick="calculateBags()" class="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+                Tính toán chia túi
+            </button>
+        </div>
+
+        <!-- Results Overview -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border">
+            <h2 class="text-lg font-semibold text-blue-800 mb-4">Tổng quan kết quả</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tổng số bài thi</label>
+                    <p id="totalExams" class="text-lg font-semibold text-gray-900">-</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Số túi</label>
+                    <p id="totalBags" class="text-lg font-semibold text-gray-900">-</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Thí sinh vắng</label>
+                    <p id="totalAbsent" class="text-lg font-semibold text-gray-900">-</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Số phòng thi</label>
+                    <p id="totalRooms" class="text-lg font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bag Details -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border">
+            <h2 class="text-lg font-semibold text-blue-800 mb-4">Chi tiết các túi</h2>
+            <div id="bagDetails" class="space-y-2"></div>
+        </div>
+
+        <!-- Export Results -->
+        <div class="bg-white p-4 rounded-lg shadow-sm border">
+            <h2 class="text-lg font-semibold text-blue-800 mb-4">Xuất kết quả</h2>
+            <div class="flex flex-wrap gap-2">
+                <button onclick="exportToText()" class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Xuất file Text
+                </button>
+                <button onclick="printResults()" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                    </svg>
+                    In kết quả
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rooms = [];
+        let absentIdsList = [];
+
+        function showMethod(method) {
+            document.getElementById('method1').classList.add('hidden');
+            document.getElementById('method2').classList.add('hidden');
+            document.getElementById(method).classList.remove('hidden');
+        }
+
+        function addRoom() {
+            const roomName = document.getElementById('roomName').value.trim();
+            const startId = parseInt(document.getElementById('startId').value);
+            const endId = parseInt(document.getElementById('endId').value);
+            const absentCount = parseInt(document.getElementById('absentCount').value) || 0;
+
+            if (!roomName || isNaN(startId) || isNaN(endId) || startId > endId) {
+                alert('Vui lòng nhập đầy đủ và đúng định dạng (Mã phách đầu phải nhỏ hơn hoặc bằng Mã phách cuối)!');
+                return;
+            }
+
+            if (absentCount > (endId - startId + 1)) {
+                alert('Số thí sinh vắng không được lớn hơn tổng số thí sinh!');
+                return;
+            }
+
+            rooms.push({ roomName, startId, endId, absentCount });
+            updateRoomList();
+            clearRoomInputs();
+        }
+
+        function updateRoomList() {
+            const roomList = document.getElementById('roomList');
+            roomList.innerHTML = rooms.map((room, index) => `
+                <div class="p-2 bg-gray-100 rounded flex justify-between items-center">
+                    <span>${room.roomName}: ${room.startId} - ${room.endId} (Vắng: ${room.absentCount})</span>
+                    <button onclick="removeRoom(${index})" class="text-red-600 hover:text-red-800">Xóa</button>
+                </div>
+            `).join('');
+            console.log('Updated room list:', rooms);
+        }
+
+        function removeRoom(index) {
+            rooms.splice(index, 1);
+            updateRoomList();
+        }
+
+        function clearRoomInputs() {
+            document.getElementById('roomName').value = '';
+            document.getElementById('startId').value = '';
+            document.getElementById('endId').value = '';
+            document.getElementById('absentCount').value = '';
+        }
+
+        function importExcel() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Vui lòng chọn file Excel!');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    rooms = [];
+                    json.forEach((row, index) => {
+                        if (row.length >= 4) {
+                            const roomName = row[0] ? row[0].toString().trim() : '';
+                            const startId = parseInt(row[1]);
+                            const endId = parseInt(row[2]);
+                            const absentCount = parseInt(row[3]) || 0;
+
+                            console.log(`Processing Excel row ${index + 1}:`, { roomName, startId, endId, absentCount });
+
+                            if (roomName && !isNaN(startId) && !isNaN(endId) && startId <= endId && absentCount <= (endId - startId + 1)) {
+                                rooms.push({
+                                    roomName,
+                                    startId,
+                                    endId,
+                                    absentCount
+                                });
+                            } else {
+                                console.warn(`Invalid row ${index + 1}:`, row);
+                            }
+                        }
+                    });
+
+                    if (rooms.length === 0) {
+                        alert('Không có dữ liệu hợp lệ trong file Excel! Vui lòng kiểm tra định dạng: 4 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng).');
+                    } else {
+                        alert(`Đã nhập ${rooms.length} phòng thi từ Excel.`);
+                        updateRoomList();
+                    }
+                    fileInput.value = '';
+                } catch (error) {
+                    console.error('Error importing Excel:', error);
+                    alert('Lỗi khi đọc file Excel! Vui lòng kiểm tra định dạng file.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function importPasteData() {
+            const pasteData = document.getElementById('pasteData').value.trim();
+            if (!pasteData) {
+                alert('Vui lòng dán dữ liệu!');
+                return;
+            }
+
+            const lines = pasteData.split('\n');
+            rooms = [];
+            lines.forEach((line, index) => {
+                const [roomName, startId, endId, absentCount] = line.trim().split(/\s+/);
+                if (roomName && startId && endId) {
+                    const startIdNum = parseInt(startId);
+                    const endIdNum = parseInt(endId);
+                    const count = parseInt(absentCount) || 0;
+                    console.log(`Processing paste row ${index + 1}:`, { roomName, startId: startIdNum, endId: endIdNum, absentCount: count });
+                    if (!isNaN(startIdNum) && !isNaN(endIdNum) && startIdNum <= endIdNum && count <= (endIdNum - startIdNum + 1)) {
+                        rooms.push({
+                            roomName,
+                            startId: startIdNum,
+                            endId: endIdNum,
+                            absentCount: count
+                        });
+                    } else {
+                        console.warn(`Invalid paste row ${index + 1}:`, line);
+                    }
+                }
+            });
+
+            if (rooms.length === 0) {
+                alert('Không có dữ liệu hợp lệ trong dữ liệu dán! Vui lòng kiểm tra định dạng: 4 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng).');
+            } else {
+                alert(`Đã nhập ${rooms.length} phòng thi từ dữ liệu dán.`);
+                updateRoomList();
+            }
+            document.getElementById('pasteData').value = '';
+        }
+
+        function clearAllRooms() {
+            rooms = [];
+            updateRoomList();
+            document.getElementById('pasteData').value = '';
+            document.getElementById('excelFile').value = '';
+        }
+
+        function processAbsentIds() {
+            const absentIds = document.getElementById('absentIds').value.trim();
+            const overallStartId = parseInt(document.getElementById('overallStartId').value);
+            const overallEndId = parseInt(document.getElementById('overallEndId').value);
+
+            if (!absentIds || isNaN(overallStartId) || isNaN(overallEndId) || overallStartId > overallEndId) {
+                alert('Vui lòng nhập đầy đủ mã phách đầu, cuối và danh sách mã phách vắng!');
+                return;
+            }
+
+            absentIdsList = absentIds
+                .split(/[\s,]+/)
+                .map(id => parseInt(id))
+                .filter(id => !isNaN(id) && id >= overallStartId && id <= overallEndId);
+
+            alert('Danh sách mã phách vắng đã được xử lý. Nhấn "Tính toán chia túi" để xem kết quả.');
+        }
+
+        function calculateBags() {
+            let totalExams = 0;
+            let totalAbsent = 0;
+            const bagSize = 200;
+            let bagDetails = [];
+
+            if (document.getElementById('method1').classList.contains('hidden')) {
+                // Phương án 2: Nhập mã phách vắng
+                const overallStartId = parseInt(document.getElementById('overallStartId').value);
+                const overallEndId = parseInt(document.getElementById('overallEndId').value);
+
+                if (isNaN(overallStartId) || isNaN(overallEndId) || overallStartId > overallEndId) {
+                    alert('Vui lòng nhập mã phách đầu và cuối hợp lệ!');
+                    return;
+                }
+
+                totalExams = overallEndId - overallStartId + 1 - absentIdsList.length;
+                totalAbsent = absentIdsList.length;
+
+                let currentId = overallStartId;
+                let bagIndex = 1;
+                let examsInBag = [];
+                let count = 0;
+
+                while (currentId <= overallEndId) {
+                    if (!absentIdsList.includes(currentId)) {
+                        examsInBag.push(currentId);
+                        count++;
+                        if (count >= bagSize) {
+                            bagDetails.push(`Túi ${bagIndex}: ${examsInBag[0]} - ${examsInBag[examsInBag.length - 1]} (${examsInBag.length} bài)`);
+                            examsInBag = [];
+                            count = 0;
+                            bagIndex++;
+                        }
+                    }
+                    currentId++;
+                }
+                if (examsInBag.length > 0) {
+                    bagDetails.push(`Túi ${bagIndex}: ${examsInBag[0]} - ${examsInBag[examsInBag.length - 1]} (${examsInBag.length} bài)`);
+                }
+            } else {
+                // Phương án 1: Nhập từng phòng
+                if (rooms.length === 0) {
+                    alert('Vui lòng thêm ít nhất một phòng thi!');
+                    return;
+                }
+
+                // Sắp xếp phòng theo mã phách đầu
+                rooms.sort((a, b) => a.startId - b.startId);
+                console.log('Sorted rooms:', rooms);
+
+                totalExams = rooms.reduce((sum, room) => sum + (room.endId - room.startId + 1 - room.absentCount), 0);
+                totalAbsent = rooms.reduce((sum, room) => sum + room.absentCount, 0);
+
+                let currentExams = [];
+                let currentCount = 0;
+                let bagIndex = 1;
+                let distributedExams = 0; // Theo dõi tổng số bài đã phân phối
+                let remainingAbsent = rooms.map(room => room.absentCount);
+                let currentRoomIndex = 0;
+
+                while (currentRoomIndex < rooms.length && distributedExams < totalExams) {
+                    const room = rooms[currentRoomIndex];
+                    const totalInRoom = room.endId - room.startId + 1;
+                    let validCount = totalInRoom - remainingAbsent[currentRoomIndex];
+                    let currentId = room.startId + (totalInRoom - validCount);
+
+                    console.log(`Processing room ${room.roomName}: ${room.startId} - ${room.endId}, validCount=${validCount}, remainingAbsent=${remainingAbsent[currentRoomIndex]}, distributedExams=${distributedExams}`);
+
+                    // Nếu phòng có bài thi hợp lệ
+                    if (validCount > 0) {
+                        const needed = Math.min(bagSize - currentCount, totalExams - distributedExams); // Số bài cần, không vượt quá totalExams
+                        const available = Math.min(needed, validCount); // Số bài có thể lấy
+                        let proposedEndId = currentId + available - 1;
+
+                        // Nếu cần lấy một phần hoặc đủ túi, yêu cầu xác nhận số vắng
+                        let absentInRange = 0;
+                        if (available < validCount || currentCount + available >= bagSize) {
+                            console.log(`Prompting for room ${room.roomName}, range ${currentId} - ${proposedEndId}, needed=${needed}`);
+                            absentInRange = parseInt(prompt(
+                                `Túi ${bagIndex} cần ${needed} bài từ phòng ${room.roomName} (mã phách ${currentId} - ${proposedEndId}). ` +
+                                `Trong đoạn này, có bao nhiêu thí sinh vắng? (Tổng vắng của phòng: ${remainingAbsent[currentRoomIndex]})`
+                            )) || 0;
+
+                            if (isNaN(absentInRange) || absentInRange < 0 || absentInRange > remainingAbsent[currentRoomIndex]) {
+                                alert('Số thí sinh vắng không hợp lệ! Vui lòng thử lại.');
+                                return;
+                            }
+
+                            // Điều chỉnh proposedEndId
+                            proposedEndId += absentInRange;
+                            if (proposedEndId > room.endId) {
+                                alert(`Không đủ bài thi trong phòng ${room.roomName} để bù cho số thí sinh vắng! Vui lòng kiểm tra lại.`);
+                                return;
+                            }
+                        }
+
+                        // Thêm các mã phách hợp lệ
+                        for (let id = currentId; id <= proposedEndId && currentCount < bagSize && distributedExams < totalExams; id++) {
+                            if (absentInRange > 0 && id > proposedEndId - absentInRange) {
+                                continue;
+                            }
+                            currentExams.push(id);
+                            currentCount++;
+                            validCount--;
+                            distributedExams++;
+                        }
+
+                        // Cập nhật số vắng còn lại
+                        remainingAbsent[currentRoomIndex] -= absentInRange;
+                        console.log(`Room ${room.roomName}: Added ${proposedEndId - currentId + 1 - absentInRange} exams, new remainingAbsent=${remainingAbsent[currentRoomIndex]}, distributedExams=${distributedExams}`);
+
+                        // Nếu đủ túi hoặc hết bài, tạo túi
+                        if (currentCount >= bagSize || distributedExams >= totalExams) {
+                            bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài)`);
+                            currentExams = [];
+                            currentCount = 0;
+                            bagIndex++;
+                        }
+
+                        // Chuyển sang phòng tiếp theo nếu hết bài hợp lệ
+                        if (validCount <= 0) {
+                            currentRoomIndex++;
+                        }
+                    } else {
+                        currentRoomIndex++;
+                    }
+                }
+
+                // Thêm túi cuối nếu còn bài
+                if (currentExams.length > 0) {
+                    bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài)`);
+                }
+
+                console.log(`Finished processing: totalExams=${totalExams}, distributedExams=${distributedExams}, bags=${bagDetails.length}`);
+            }
+
+            document.getElementById('totalExams').textContent = totalExams;
+            document.getElementById('totalBags').textContent = bagDetails.length;
+            document.getElementById('totalAbsent').textContent = totalAbsent;
+            document.getElementById('totalRooms').textContent = rooms.length;
+            document.getElementById('bagDetails').innerHTML = bagDetails.map(detail => `<div class="p-2 bg-gray-100 rounded">${detail}</div>`).join('');
+        }
+
+        function exportToText() {
+            const totalExams = document.getElementById('totalExams').textContent;
+            const totalBags = document.getElementById('totalBags').textContent;
+            const totalAbsent = document.getElementById('totalAbsent').textContent;
+            const totalRooms = document.getElementById('totalRooms').textContent;
+            const bagDetails = Array.from(document.getElementById('bagDetails').children)
+                .map(div => div.textContent)
+                .join('\n');
+
+            const content = `Tổng số bài thi: ${totalExams}\nSố túi: ${totalBags}\nThí sinh vắng: ${totalAbsent}\nSố phòng thi: ${totalRooms}\n\nChi tiết các túi:\n${bagDetails}`;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ket_qua_chia_tui.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function printResults() {
+            window.print();
+        }
+    </script>
+</body>
+</html>
