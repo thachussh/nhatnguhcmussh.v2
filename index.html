@@ -397,17 +397,37 @@ A301    6051    6100    0"
             const overallStartId = parseInt(document.getElementById('overallStartId').value);
             const overallEndId = parseInt(document.getElementById('overallEndId').value);
 
-            if (!absentIds || isNaN(overallStartId) || isNaN(overallEndId) || overallStartId > overallEndId) {
-                alert('Vui lòng nhập đầy đủ mã phách đầu, cuối và danh sách mã phách vắng!');
+            if (isNaN(overallStartId) || isNaN(overallEndId) || overallStartId > overallEndId) {
+                alert('Vui lòng nhập mã phách đầu và cuối hợp lệ!');
+                return;
+            }
+
+            if (!absentIds) {
+                absentIdsList = [];
+                alert('Không có mã phách vắng được nhập. Số thí sinh vắng sẽ là 0.');
                 return;
             }
 
             absentIdsList = absentIds
                 .split(/[\s,]+/)
-                .map(id => parseInt(id))
-                .filter(id => !isNaN(id) && id >= overallStartId && id <= overallEndId);
+                .map(id => {
+                    const parsedId = parseInt(id);
+                    if (isNaN(parsedId)) {
+                        console.warn(`Invalid absent ID: ${id}`);
+                        return null;
+                    }
+                    return parsedId;
+                })
+                .filter(id => id !== null && id >= overallStartId && id <= overallEndId);
 
-            alert('Danh sách mã phách vắng đã được xử lý. Nhấn "Tính toán chia túi" để xem kết quả.');
+            console.log('Processed absent IDs:', absentIdsList);
+
+            if (absentIdsList.length === 0) {
+                alert('Không có mã phách vắng hợp lệ trong khoảng từ ' + overallStartId + ' đến ' + overallEndId + '. Vui lòng kiểm tra lại!');
+                return;
+            }
+
+            alert(`Đã xử lý ${absentIdsList.length} mã phách vắng: ${absentIdsList.join(', ')}. Nhấn "Tính toán chia túi" để xem kết quả.`);
         }
 
         function calculateBags() {
@@ -426,11 +446,16 @@ A301    6051    6100    0"
                     return;
                 }
 
-                totalExams = overallEndId - overallStartId + 1 - absentIdsList.length;
                 totalAbsent = absentIdsList.length;
+                totalExams = overallEndId - overallStartId + 1 - totalAbsent;
+
+                if (totalExams <= 0) {
+                    alert('Không có bài thi hợp lệ sau khi trừ thí sinh vắng!');
+                    return;
+                }
 
                 const expectedBags = Math.ceil(totalExams / bagSize);
-                console.log(`Method 2: totalExams=${totalExams}, expectedBags=${expectedBags}`);
+                console.log(`Method 2: totalExams=${totalExams}, totalAbsent=${totalAbsent}, expectedBags=${expectedBags}, absentIdsList=${absentIdsList}`);
 
                 let currentId = overallStartId;
                 let bagIndex = 1;
@@ -447,6 +472,8 @@ A301    6051    6100    0"
                             count = 0;
                             bagIndex++;
                         }
+                    } else {
+                        console.log(`Skipping absent ID: ${currentId}`);
                     }
                     currentId++;
                 }
@@ -558,6 +585,7 @@ A301    6051    6100    0"
                     // Thêm các mã phách hợp lệ
                     for (let id = currentId; id <= proposedEndId && currentCount < bagSize && distributedExams < totalExams; id++) {
                         if (room.absentIds.includes(id)) {
+                            console.log(`Skipping absent ID in room ${room.roomName}: ${id}`);
                             continue;
                         }
                         currentExams.push(id);
@@ -594,7 +622,7 @@ A301    6051    6100    0"
             document.getElementById('totalExams').textContent = totalExams;
             document.getElementById('totalBags').textContent = bagDetails.length;
             document.getElementById('totalAbsent').textContent = totalAbsent;
-            document.getElementById('totalRooms').textContent = rooms.length;
+            document.getElementById('totalRooms').textContent = document.getElementById('method1').classList.contains('hidden') ? 0 : rooms.length;
             document.getElementById('bagDetails').innerHTML = bagDetails.map(detail => `<div class="p-2 bg-gray-100 rounded">${detail}</div>`).join('');
         }
 
