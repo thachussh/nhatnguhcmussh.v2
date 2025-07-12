@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -76,18 +37,19 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">Tải lên file Excel</label>
                         <input type="file" id="excelFile" accept=".xlsx,.xls" 
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
-                        <p class="text-xs text-gray-500 mt-1">Chấp nhận file .xlsx, .xls với 4 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng</p>
+                        <p class="text-xs text-gray-500 mt-1">Chấp nhận file .xlsx, .xls với 4-5 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng, Mã phách vắng (tùy chọn, cách nhau bằng dấu phẩy)</p>
                     </div>
                     
                     <!-- Copy-Paste Area -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Hoặc copy-paste dữ liệu từ Excel</label>
-                        <textarea id="pasteData" rows="6" placeholder="Dán dữ liệu từ Excel vào đây (4 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng)
+                        <textarea id="pasteData" rows="6" placeholder="Dán dữ liệu từ Excel vào đây (4-5 cột: Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng, Mã phách vắng (tùy chọn))
 Ví dụ:
-A101    801     1000    10
-A201    1001    1045    3
-A202    1046    1085    2
-A203    1086    1125    0"
+A101    4201    4400    1    4202
+A201    4401    4445    3    4402,4403,4404
+A202    4446    4485    2    4446,4447
+A203    4486    4525    0
+A301    6051    6100    0"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y font-mono text-sm"></textarea>
                     </div>
                     
@@ -125,15 +87,19 @@ A203    1086    1125    0"
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Mã phách đầu</label>
-                        <input type="number" id="startId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1001">
+                        <input type="number" id="startId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 4401">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Mã phách cuối</label>
-                        <input type="number" id="endId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1045">
+                        <input type="number" id="endId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 4445">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Số thí sinh vắng</label>
                         <input type="number" id="absentCount" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 3">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã phách vắng (tùy chọn)</label>
+                        <input type="text" id="absentIds" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 4402,4403">
                     </div>
                 </div>
                 <button onclick="addRoom()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2">
@@ -159,11 +125,11 @@ A203    1086    1125    0"
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Mã phách đầu (toàn bộ)</label>
-                        <input type="number" id="overallStartId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1001">
+                        <input type="number" id="overallStartId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 4201">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Mã phách cuối (toàn bộ)</label>
-                        <input type="number" id="overallEndId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 1125">
+                        <input type="number" id="overallEndId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="VD: 6250">
                     </div>
                 </div>
             </div>
@@ -173,7 +139,7 @@ A203    1086    1125    0"
                 <h2 class="text-lg font-semibold text-blue-800 mb-4">Mã phách thí sinh vắng mặt</h2>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Nhập danh sách mã phách (cách nhau bằng dấu phẩy, xuống dòng, hoặc khoảng trắng)</label>
-                    <textarea id="absentIds" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y font-mono text-sm" placeholder="VD: 1020, 1030, 1040"></textarea>
+                    <textarea id="absentIds" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y font-mono text-sm" placeholder="VD: 4202, 4402, 4403"></textarea>
                 </div>
                 <button onclick="processAbsentIds()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,6 +224,7 @@ A203    1086    1125    0"
             const startId = parseInt(document.getElementById('startId').value);
             const endId = parseInt(document.getElementById('endId').value);
             const absentCount = parseInt(document.getElementById('absentCount').value) || 0;
+            const absentIds = document.getElementById('absentIds').value.trim();
 
             if (!roomName || isNaN(startId) || isNaN(endId) || startId > endId) {
                 alert('Vui lòng nhập đầy đủ và đúng định dạng (Mã phách đầu phải nhỏ hơn hoặc bằng Mã phách cuối)!');
@@ -269,7 +236,16 @@ A203    1086    1125    0"
                 return;
             }
 
-            rooms.push({ roomName, startId, endId, absentCount });
+            let absentIdsArray = [];
+            if (absentIds) {
+                absentIdsArray = absentIds.split(/[\s,]+/).map(id => parseInt(id)).filter(id => !isNaN(id) && id >= startId && id <= endId);
+                if (absentIdsArray.length !== absentCount) {
+                    alert('Số mã phách vắng không khớp với số lượng thí sinh vắng đã nhập!');
+                    return;
+                }
+            }
+
+            rooms.push({ roomName, startId, endId, absentCount, absentIds: absentIdsArray });
             updateRoomList();
             clearRoomInputs();
         }
@@ -278,7 +254,7 @@ A203    1086    1125    0"
             const roomList = document.getElementById('roomList');
             roomList.innerHTML = rooms.map((room, index) => `
                 <div class="p-2 bg-gray-100 rounded flex justify-between items-center">
-                    <span>${room.roomName}: ${room.startId} - ${room.endId} (Vắng: ${room.absentCount})</span>
+                    <span>${room.roomName}: ${room.startId} - ${room.endId} (Vắng: ${room.absentCount}${room.absentIds.length ? ', Mã: ' + room.absentIds.join(', ') : ''})</span>
                     <button onclick="removeRoom(${index})" class="text-red-600 hover:text-red-800">Xóa</button>
                 </div>
             `).join('');
@@ -295,6 +271,7 @@ A203    1086    1125    0"
             document.getElementById('startId').value = '';
             document.getElementById('endId').value = '';
             document.getElementById('absentCount').value = '';
+            document.getElementById('absentIds').value = '';
         }
 
         function importExcel() {
@@ -320,16 +297,24 @@ A203    1086    1125    0"
                             const startId = parseInt(row[1]);
                             const endId = parseInt(row[2]);
                             const absentCount = parseInt(row[3]) || 0;
+                            const absentIds = row[4] ? row[4].toString().split(/[\s,]+/).map(id => parseInt(id)).filter(id => !isNaN(id)) : [];
 
-                            console.log(`Processing Excel row ${index + 1}:`, { roomName, startId, endId, absentCount });
+                            console.log(`Processing Excel row ${index + 1}:`, { roomName, startId, endId, absentCount, absentIds });
 
                             if (roomName && !isNaN(startId) && !isNaN(endId) && startId <= endId && absentCount <= (endId - startId + 1)) {
-                                rooms.push({
-                                    roomName,
-                                    startId,
-                                    endId,
-                                    absentCount
-                                });
+                                if (absentIds.length && absentIds.length !== absentCount) {
+                                    console.warn(`Invalid absent IDs count in row ${index + 1}: expected ${absentCount}, got ${absentIds.length}`);
+                                } else if (absentIds.some(id => id < startId || id > endId)) {
+                                    console.warn(`Invalid absent IDs in row ${index + 1}: out of range ${startId}-${endId}`);
+                                } else {
+                                    rooms.push({
+                                        roomName,
+                                        startId,
+                                        endId,
+                                        absentCount,
+                                        absentIds
+                                    });
+                                }
                             } else {
                                 console.warn(`Invalid row ${index + 1}:`, row);
                             }
@@ -337,7 +322,7 @@ A203    1086    1125    0"
                     });
 
                     if (rooms.length === 0) {
-                        alert('Không có dữ liệu hợp lệ trong file Excel! Vui lòng kiểm tra định dạng: 4 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng).');
+                        alert('Không có dữ liệu hợp lệ trong file Excel! Vui lòng kiểm tra định dạng: 4-5 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng, Mã phách vắng (tùy chọn)).');
                     } else {
                         alert(`Đã nhập ${rooms.length} phòng thi từ Excel.`);
                         updateRoomList();
@@ -361,19 +346,30 @@ A203    1086    1125    0"
             const lines = pasteData.split('\n');
             rooms = [];
             lines.forEach((line, index) => {
-                const [roomName, startId, endId, absentCount] = line.trim().split(/\s+/);
-                if (roomName && startId && endId) {
-                    const startIdNum = parseInt(startId);
-                    const endIdNum = parseInt(endId);
-                    const count = parseInt(absentCount) || 0;
-                    console.log(`Processing paste row ${index + 1}:`, { roomName, startId: startIdNum, endId: endIdNum, absentCount: count });
-                    if (!isNaN(startIdNum) && !isNaN(endIdNum) && startIdNum <= endIdNum && count <= (endIdNum - startIdNum + 1)) {
-                        rooms.push({
-                            roomName,
-                            startId: startIdNum,
-                            endId: endIdNum,
-                            absentCount: count
-                        });
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 4) {
+                    const roomName = parts[0];
+                    const startId = parseInt(parts[1]);
+                    const endId = parseInt(parts[2]);
+                    const absentCount = parseInt(parts[3]) || 0;
+                    const absentIds = parts[4] ? parts[4].split(/[\s,]+/).map(id => parseInt(id)).filter(id => !isNaN(id)) : [];
+
+                    console.log(`Processing paste row ${index + 1}:`, { roomName, startId, endId, absentCount, absentIds });
+
+                    if (!isNaN(startId) && !isNaN(endId) && startId <= endId && absentCount <= (endId - startId + 1)) {
+                        if (absentIds.length && absentIds.length !== absentCount) {
+                            console.warn(`Invalid absent IDs count in row ${index + 1}: expected ${absentCount}, got ${absentIds.length}`);
+                        } else if (absentIds.some(id => id < startId || id > endId)) {
+                            console.warn(`Invalid absent IDs in row ${index + 1}: out of range ${startId}-${endId}`);
+                        } else {
+                            rooms.push({
+                                roomName,
+                                startId,
+                                endId,
+                                absentCount,
+                                absentIds
+                            });
+                        }
                     } else {
                         console.warn(`Invalid paste row ${index + 1}:`, line);
                     }
@@ -381,7 +377,7 @@ A203    1086    1125    0"
             });
 
             if (rooms.length === 0) {
-                alert('Không có dữ liệu hợp lệ trong dữ liệu dán! Vui lòng kiểm tra định dạng: 4 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng).');
+                alert('Không có dữ liệu hợp lệ trong dữ liệu dán! Vui lòng kiểm tra định dạng: 4-5 cột (Tên phòng, Mã phách đầu, Mã phách cuối, Số thí sinh vắng, Mã phách vắng (tùy chọn)).');
             } else {
                 alert(`Đã nhập ${rooms.length} phòng thi từ dữ liệu dán.`);
                 updateRoomList();
@@ -433,16 +429,19 @@ A203    1086    1125    0"
                 totalExams = overallEndId - overallStartId + 1 - absentIdsList.length;
                 totalAbsent = absentIdsList.length;
 
+                const expectedBags = Math.ceil(totalExams / bagSize);
+                console.log(`Method 2: totalExams=${totalExams}, expectedBags=${expectedBags}`);
+
                 let currentId = overallStartId;
                 let bagIndex = 1;
                 let examsInBag = [];
                 let count = 0;
 
-                while (currentId <= overallEndId) {
+                while (currentId <= overallEndId && bagIndex <= expectedBags) {
                     if (!absentIdsList.includes(currentId)) {
                         examsInBag.push(currentId);
                         count++;
-                        if (count >= bagSize) {
+                        if (count >= bagSize || (bagIndex === expectedBags && count >= totalExams - (bagSize * (expectedBags - 1)))) {
                             bagDetails.push(`Túi ${bagIndex}: ${examsInBag[0]} - ${examsInBag[examsInBag.length - 1]} (${examsInBag.length} bài)`);
                             examsInBag = [];
                             count = 0;
@@ -468,84 +467,125 @@ A203    1086    1125    0"
                 totalExams = rooms.reduce((sum, room) => sum + (room.endId - room.startId + 1 - room.absentCount), 0);
                 totalAbsent = rooms.reduce((sum, room) => sum + room.absentCount, 0);
 
+                const expectedBags = Math.ceil(totalExams / bagSize);
+                console.log(`Method 1: totalExams=${totalExams}, expectedBags=${expectedBags}`);
+
                 let currentExams = [];
                 let currentCount = 0;
                 let bagIndex = 1;
-                let distributedExams = 0; // Theo dõi tổng số bài đã phân phối
-                let remainingAbsent = rooms.map(room => room.absentCount);
+                let distributedExams = 0;
                 let currentRoomIndex = 0;
+                let lastUsedId = null;
 
-                while (currentRoomIndex < rooms.length && distributedExams < totalExams) {
+                while (currentRoomIndex < rooms.length && distributedExams < totalExams && bagIndex <= expectedBags) {
                     const room = rooms[currentRoomIndex];
                     const totalInRoom = room.endId - room.startId + 1;
-                    let validCount = totalInRoom - remainingAbsent[currentRoomIndex];
-                    let currentId = room.startId + (totalInRoom - validCount);
+                    let validCount = totalInRoom - room.absentCount;
+                    let currentId = room.startId;
 
-                    console.log(`Processing room ${room.roomName}: ${room.startId} - ${room.endId}, validCount=${validCount}, remainingAbsent=${remainingAbsent[currentRoomIndex]}, distributedExams=${distributedExams}`);
+                    console.log(`Processing room ${room.roomName}: ${room.startId} - ${room.endId}, validCount=${validCount}, distributedExams=${distributedExams}`);
 
-                    // Nếu phòng có bài thi hợp lệ
-                    if (validCount > 0) {
-                        const needed = Math.min(bagSize - currentCount, totalExams - distributedExams); // Số bài cần, không vượt quá totalExams
-                        const available = Math.min(needed, validCount); // Số bài có thể lấy
-                        let proposedEndId = currentId + available - 1;
+                    // Hỏi mã phách đầu tiên của túi mới
+                    if (currentCount === 0) {
+                        let suggestedStartId = lastUsedId ? lastUsedId + 1 : room.startId;
+                        let nextRoom = currentRoomIndex + 1 < rooms.length ? rooms[currentRoomIndex + 1].roomName : 'không có';
+                        let startIdInput = parseInt(prompt(
+                            `Nhập mã phách đầu tiên cho Túi ${bagIndex} (gợi ý: ${suggestedStartId}, phòng hiện tại: ${room.roomName} (${room.startId}-${room.endId}), phòng tiếp theo: ${nextRoom})`
+                        ));
 
-                        // Nếu cần lấy một phần hoặc đủ túi, yêu cầu xác nhận số vắng
-                        let absentInRange = 0;
-                        if (available < validCount || currentCount + available >= bagSize) {
-                            console.log(`Prompting for room ${room.roomName}, range ${currentId} - ${proposedEndId}, needed=${needed}`);
-                            absentInRange = parseInt(prompt(
-                                `Túi ${bagIndex} cần ${needed} bài từ phòng ${room.roomName} (mã phách ${currentId} - ${proposedEndId}). ` +
-                                `Trong đoạn này, có bao nhiêu thí sinh vắng? (Tổng vắng của phòng: ${remainingAbsent[currentRoomIndex]})`
-                            )) || 0;
+                        if (isNaN(startIdInput) || startIdInput < room.startId || startIdInput > room.endId) {
+                            alert(`Mã phách đầu không hợp lệ! Phải nằm trong khoảng ${room.startId} - ${room.endId}.`);
+                            return;
+                        }
+                        currentId = startIdInput;
+                        console.log(`User selected startId for bag ${bagIndex}: ${currentId}`);
+                    }
 
-                            if (isNaN(absentInRange) || absentInRange < 0 || absentInRange > remainingAbsent[currentRoomIndex]) {
-                                alert('Số thí sinh vắng không hợp lệ! Vui lòng thử lại.');
-                                return;
-                            }
+                    // Tính số bài cần cho túi hiện tại
+                    const needed = Math.min(bagSize - currentCount, totalExams - distributedExams);
+                    let available = Math.min(needed, validCount);
+                    let proposedEndId = currentId + available - 1;
 
-                            // Điều chỉnh proposedEndId
-                            proposedEndId += absentInRange;
-                            if (proposedEndId > room.endId) {
-                                alert(`Không đủ bài thi trong phòng ${room.roomName} để bù cho số thí sinh vắng! Vui lòng kiểm tra lại.`);
-                                return;
-                            }
+                    // Tìm phòng mà túi sẽ kết thúc
+                    let endRoomIndex = currentRoomIndex;
+                    let remainingNeeded = needed;
+                    let roomsUsed = [room.roomName];
+                    let accumulatedValid = validCount;
+
+                    while (remainingNeeded > accumulatedValid && endRoomIndex + 1 < rooms.length) {
+                        endRoomIndex++;
+                        const nextRoom = rooms[endRoomIndex];
+                        accumulatedValid += (nextRoom.endId - nextRoom.startId + 1 - nextRoom.absentCount);
+                        roomsUsed.push(nextRoom.roomName);
+                    }
+
+                    const endRoom = rooms[endRoomIndex];
+                    console.log(`Bag ${bagIndex} will span rooms: ${roomsUsed.join(', ')}, expected end ID: ${proposedEndId}`);
+
+                    // Nếu cần lấy một phần hoặc đủ túi, kiểm tra số thí sinh vắng
+                    let absentInRange = 0;
+                    if (available < validCount || currentCount + available >= bagSize) {
+                        // Kiểm tra mã phách vắng trong đoạn mã
+                        let actualAbsentInRange = room.absentIds.filter(id => id >= currentId && id <= proposedEndId).length;
+                        console.log(`Prompting for absent count in room ${room.roomName}, range ${currentId} - ${proposedEndId}, needed=${needed}, actualAbsentInRange=${actualAbsentInRange}`);
+
+                        let promptMessage = `Túi ${bagIndex} cần ${needed} bài từ phòng ${room.roomName} (mã phách ${currentId} - ${proposedEndId}). ` +
+                                           `Túi sẽ kết thúc ở phòng ${endRoom.roomName}. Trong đoạn này, có bao nhiêu thí sinh vắng? (Tổng vắng của phòng ${room.roomName}: ${room.absentCount})`;
+                        if (room.absentIds.length > 0) {
+                            promptMessage += `\nMã phách vắng trong đoạn: ${room.absentIds.filter(id => id >= currentId && id <= proposedEndId).join(', ') || 'không có'}`;
                         }
 
-                        // Thêm các mã phách hợp lệ
-                        for (let id = currentId; id <= proposedEndId && currentCount < bagSize && distributedExams < totalExams; id++) {
-                            if (absentInRange > 0 && id > proposedEndId - absentInRange) {
-                                continue;
-                            }
-                            currentExams.push(id);
-                            currentCount++;
-                            validCount--;
-                            distributedExams++;
+                        absentInRange = parseInt(prompt(promptMessage)) || 0;
+
+                        if (isNaN(absentInRange) || absentInRange < 0 || absentInRange > room.absentCount) {
+                            alert('Số thí sinh vắng không hợp lệ! Vui lòng thử lại.');
+                            return;
                         }
 
-                        // Cập nhật số vắng còn lại
-                        remainingAbsent[currentRoomIndex] -= absentInRange;
-                        console.log(`Room ${room.roomName}: Added ${proposedEndId - currentId + 1 - absentInRange} exams, new remainingAbsent=${remainingAbsent[currentRoomIndex]}, distributedExams=${distributedExams}`);
-
-                        // Nếu đủ túi hoặc hết bài, tạo túi
-                        if (currentCount >= bagSize || distributedExams >= totalExams) {
-                            bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài)`);
-                            currentExams = [];
-                            currentCount = 0;
-                            bagIndex++;
+                        if (room.absentIds.length > 0 && absentInRange !== actualAbsentInRange) {
+                            alert(`Cảnh báo: Số thí sinh vắng nhập vào (${absentInRange}) không khớp với danh sách mã vắng (${actualAbsentInRange}) trong đoạn ${currentId} - ${proposedEndId}!`);
+                            return;
                         }
 
-                        // Chuyển sang phòng tiếp theo nếu hết bài hợp lệ
-                        if (validCount <= 0) {
-                            currentRoomIndex++;
+                        // Điều chỉnh proposedEndId
+                        proposedEndId += absentInRange;
+                        if (proposedEndId > room.endId) {
+                            alert(`Không đủ bài thi trong phòng ${room.roomName} để bù cho số thí sinh vắng! Vui lòng kiểm tra lại.`);
+                            return;
                         }
-                    } else {
+                    }
+
+                    // Thêm các mã phách hợp lệ
+                    for (let id = currentId; id <= proposedEndId && currentCount < bagSize && distributedExams < totalExams; id++) {
+                        if (room.absentIds.includes(id)) {
+                            continue;
+                        }
+                        currentExams.push(id);
+                        currentCount++;
+                        validCount--;
+                        distributedExams++;
+                    }
+
+                    lastUsedId = proposedEndId;
+                    console.log(`Room ${room.roomName}: Added ${proposedEndId - currentId + 1 - absentInRange} exams, lastUsedId=${lastUsedId}, distributedExams=${distributedExams}`);
+
+                    // Nếu đủ túi hoặc hết bài, tạo túi
+                    if (currentCount >= bagSize || (distributedExams >= totalExams && currentExams.length > 0)) {
+                        bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài, từ các phòng: ${roomsUsed.join(', ')})`);
+                        currentExams = [];
+                        currentCount = 0;
+                        bagIndex++;
+                    }
+
+                    // Chuyển sang phòng tiếp theo nếu hết bài hợp lệ
+                    if (validCount <= 0) {
                         currentRoomIndex++;
                     }
                 }
 
                 // Thêm túi cuối nếu còn bài
                 if (currentExams.length > 0) {
-                    bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài)`);
+                    bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài, từ các phòng: ${roomsUsed.join(', ')})`);
                 }
 
                 console.log(`Finished processing: totalExams=${totalExams}, distributedExams=${distributedExams}, bags=${bagDetails.length}`);
