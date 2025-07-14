@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chia Túi Bài Thi Theo Phòng - HCM USSH</title>
+    <title>Chia Túi Bài Thi Theo Phòng - USSH HCM</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -35,7 +35,7 @@
 <body class="bg-gray-100 font-sans">
     <div class="container mx-auto p-4 max-w-7xl">
         <h1 class="text-2xl font-bold text-center text-purple-800 mb-6">
-            Chia Túi Bài Thi Theo Phòng - HCM USSH
+            Chia Túi Bài Thi Theo Phòng - USSH HCM
         </h1>
         <p class="text-center text-gray-600 mb-8">
             Hệ thống gộp nhiều phòng thi thành các túi 200 bài với 2 phương án xử lý
@@ -223,7 +223,7 @@ A301    6051    6100    0"
         <div id="modal" class="modal">
             <div class="modal-content">
                 <p id="modalMessage"></p>
-                <input type="text" id="modalInput" style="display: none;">
+                <input type="number" id="modalInput" style="display: none;" placeholder="Nhập số">
                 <div class="flex gap-2">
                     <button id="modalOk" class="bg-blue-600 text-white rounded-md hover:bg-blue-700">OK</button>
                     <button id="modalCancel" class="bg-gray-600 text-white rounded-md hover:bg-gray-700" style="display: none;">Hủy</button>
@@ -250,17 +250,23 @@ A301    6051    6100    0"
             modalInput.value = '';
             modal.style.display = 'block';
 
+            console.log('Showing modal:', { message, input });
+
             if (input) {
                 modalOk.onclick = () => {
+                    const value = modalInput.value.trim();
+                    console.log('Modal OK clicked, input value:', value);
                     modal.style.display = 'none';
-                    callback(modalInput.value);
+                    callback(value);
                 };
                 modalCancel.onclick = () => {
+                    console.log('Modal Cancel clicked');
                     modal.style.display = 'none';
                     callback(null);
                 };
             } else {
                 modalOk.onclick = () => {
+                    console.log('Modal OK clicked (no input)');
                     modal.style.display = 'none';
                     callback?.();
                 };
@@ -520,6 +526,7 @@ A301    6051    6100    0"
                 }
 
                 console.log(`Method 2 completed: bags=${bagDetails.length}`);
+                displayResults();
             } else {
                 // Phương án 1: Nhập từng phòng
                 if (rooms.length === 0) {
@@ -542,150 +549,196 @@ A301    6051    6100    0"
                 let distributedExams = 0;
                 let currentRoomIndex = 0;
                 let lastUsedId = null;
+                let roomsUsed = new Set();
 
-                while (currentRoomIndex < rooms.length && distributedExams < totalExams && bagIndex <= expectedBags) {
-                    const room = rooms[currentRoomIndex];
-                    const totalInRoom = room.endId - room.startId + 1;
-                    let validCount = totalInRoom - room.absentCount;
-                    let currentId = room.startId;
+                function formatBagRange(exams) {
+                    if (exams.length === 0) return '';
+                    let ranges = [];
+                    let start = exams[0];
+                    let prev = exams[0];
+                    for (let i = 1; i < exams.length; i++) {
+                        if (exams[i] !== prev + 1) {
+                            ranges.push(`${start}-${prev}`);
+                            start = exams[i];
+                        }
+                        prev = exams[i];
+                    }
+                    ranges.push(`${start}-${prev}`);
+                    return ranges.join(', ');
+                }
 
-                    console.log(`Processing room ${room.roomName}: ${room.startId} - ${room.endId}, validCount=${validCount}, distributedExams=${distributedExams}`);
+                function processNextBag() {
+                    if (currentRoomIndex >= rooms.length || distributedExams >= totalExams || bagIndex > expectedBags) {
+                        if (currentExams.length > 0) {
+                            bagDetails.push(`Túi ${bagIndex}: ${formatBagRange(currentExams)} (${currentExams.length} bài, từ các phòng: ${Array.from(roomsUsed).join(', ')})`);
+                        }
+                        console.log(`Method 1 completed: totalExams=${totalExams}, distributedExams=${distributedExams}, bags=${bagDetails.length}`);
+                        displayResults();
+                        return;
+                    }
 
-                    if (currentCount === 0) {
-                        let suggestedStartId = lastUsedId ? lastUsedId + 1 : room.startId;
+                    let currentId;
+                    if (lastUsedId === null) {
+                        // Túi 1: Yêu cầu nhập mã phách đầu
+                        const room = rooms[currentRoomIndex];
+                        roomsUsed = new Set([room.roomName]);
                         let nextRoom = currentRoomIndex + 1 < rooms.length ? rooms[currentRoomIndex + 1].roomName : 'không có';
                         showModal(
-                            `Nhập mã phách đầu tiên cho Túi ${bagIndex} (gợi ý: ${suggestedStartId}, phòng hiện tại: ${room.roomName} (${room.startId}-${room.endId}), phòng tiếp theo: ${nextRoom})`,
+                            `Nhập mã phách đầu tiên cho Túi ${bagIndex} (gợi ý: ${room.startId}, phòng hiện tại: ${room.roomName} (${room.startId}-${room.endId}), phòng tiếp theo: ${nextRoom})`,
                             true,
                             (value) => {
                                 const startIdInput = parseInt(value);
-                                if (isNaN(startIdInput) || startIdInput < room.startId || startIdInput > room.endId) {
-                                    showModal(`Mã phách đầu không hợp lệ! Phải nằm trong khoảng ${room.startId} - ${room.endId}.`);
+                                console.log(`startIdInput for bag ${bagIndex}:`, startIdInput);
+                                if (isNaN(startIdInput) || startIdInput < room.startId || startIdInput > room.endId || room.absentIds.includes(startIdInput)) {
+                                    showModal(`Mã phách đầu không hợp lệ! Phải nằm trong khoảng ${room.startId} - ${room.endId} và không được là mã vắng.`);
                                     return;
                                 }
                                 currentId = startIdInput;
-                                console.log(`User selected startId for bag ${bagIndex}: ${currentId}`);
-
-                                processRoom();
+                                processRoom(currentId);
+                            }
+                        );
+                        return;
+                    } else {
+                        // Túi 2 trở đi: Tự động chọn mã phách đầu
+                        currentId = lastUsedId + 1;
+                        while (currentRoomIndex < rooms.length && currentId > rooms[currentRoomIndex].endId) {
+                            currentRoomIndex++;
+                        }
+                        if (currentRoomIndex >= rooms.length) {
+                            showModal('Không còn phòng thi để phân phối bài!');
+                            return;
+                        }
+                        const currentRoom = rooms[currentRoomIndex];
+                        while (currentRoom.absentIds.includes(currentId)) {
+                            currentId++;
+                            if (currentId > currentRoom.endId) {
+                                currentRoomIndex++;
+                                if (currentRoomIndex >= rooms.length) {
+                                    showModal('Không còn mã phách hợp lệ để phân phối!');
+                                    return;
+                                }
+                                currentId = rooms[currentRoomIndex].startId;
+                            }
+                        }
+                        roomsUsed = new Set([currentRoom.roomName]);
+                        let nextRoom = currentRoomIndex + 1 < rooms.length ? rooms[currentRoomIndex + 1].roomName : 'không có';
+                        showModal(
+                            `Túi ${bagIndex} sẽ bắt đầu từ mã phách ${currentId} (phòng hiện tại: ${currentRoom.roomName} (${currentRoom.startId}-${currentRoom.endId}), phòng tiếp theo: ${nextRoom}). Nhấn OK để tiếp tục.`,
+                            false,
+                            () => {
+                                console.log(`Auto-calculated startId for bag ${bagIndex}: ${currentId}`);
+                                processRoom(currentId);
                             }
                         );
                         return;
                     }
+                }
 
-                    function processRoom() {
-                        const needed = Math.min(bagSize - currentCount, totalExams - distributedExams);
-                        let available = Math.min(needed, validCount);
-                        let proposedEndId = currentId + available - 1;
+                function processRoom(currentId) {
+                    let needed = Math.min(bagSize - currentCount, totalExams - distributedExams);
+                    let currentRoomIndexLocal = currentRoomIndex;
+                    let examsAdded = 0;
+                    let proposedEndId = currentId - 1;
+                    let absentInRange = 0;
+                    let roomsUsedLocal = new Set(roomsUsed);
+                    let examIds = [];
 
-                        let endRoomIndex = currentRoomIndex;
-                        let remainingNeeded = needed;
-                        let roomsUsed = [room.roomName];
-                        let accumulatedValid = validCount;
+                    console.log(`Processing bag ${bagIndex}, needed=${needed}, currentRoomIndex=${currentRoomIndexLocal}, currentId=${currentId}`);
 
-                        while (remainingNeeded > accumulatedValid && endRoomIndex + 1 < rooms.length) {
-                            endRoomIndex++;
-                            const nextRoom = rooms[endRoomIndex];
-                            accumulatedValid += (nextRoom.endId - nextRoom.startId + 1 - nextRoom.absentCount);
-                            roomsUsed.push(nextRoom.roomName);
+                    // Thu thập đủ bài thi từ các phòng
+                    while (needed > 0 && currentRoomIndexLocal < rooms.length) {
+                        const currentRoom = rooms[currentRoomIndexLocal];
+                        let id = Math.max(currentId, currentRoom.startId);
+                        let validCount = 0;
+
+                        // Đếm số bài hợp lệ trong phòng hiện tại
+                        while (id <= currentRoom.endId && validCount < needed) {
+                            if (!currentRoom.absentIds.includes(id)) {
+                                validCount++;
+                                examIds.push(id);
+                            } else {
+                                absentInRange++;
+                            }
+                            id++;
                         }
 
-                        const endRoom = rooms[endRoomIndex];
-                        console.log(`Bag ${bagIndex} will span rooms: ${roomsUsed.join(', ')}, expected end ID: ${proposedEndId}`);
+                        examsAdded += validCount;
+                        needed -= validCount;
+                        proposedEndId = id - 1;
+                        roomsUsedLocal.add(currentRoom.roomName);
 
-                        let absentInRange = 0;
-                        if (available < validCount || currentCount + available >= bagSize) {
-                            let actualAbsentInRange = room.absentIds.filter(id => id >= currentId && id <= proposedEndId).length;
-                            console.log(`Prompting for absent count in room ${room.roomName}, range ${currentId} - ${proposedEndId}, needed=${needed}, actualAbsentInRange=${actualAbsentInRange}`);
+                        console.log(`Room ${currentRoom.roomName}: validCount=${validCount}, absentInRange=${absentInRange}, proposedEndId=${proposedEndId}, examsAdded=${examsAdded}`);
 
-                            let promptMessage = `Túi ${bagIndex} cần ${needed} bài từ phòng ${room.roomName} (mã phách ${currentId} - ${proposedEndId}). ` +
-                                               `Túi sẽ kết thúc ở phòng ${endRoom.roomName}. Trong đoạn này, có bao nhiêu thí sinh vắng? (Tổng vắng của phòng ${room.roomName}: ${room.absentCount})`;
-                            if (room.absentIds.length > 0) {
-                                promptMessage += `\nMã phách vắng trong đoạn: ${room.absentIds.filter(id => id >= currentId && id <= proposedEndId).join(', ') || 'không có'}`;
+                        if (needed > 0) {
+                            currentRoomIndexLocal++;
+                            if (currentRoomIndexLocal < rooms.length) {
+                                currentId = rooms[currentRoomIndexLocal].startId;
                             }
+                        } else {
+                            break;
+                        }
+                    }
 
-                            showModal(promptMessage, true, (value) => {
-                                absentInRange = parseInt(value) || 0;
-                                if (isNaN(absentInRange) || absentInRange < 0 || absentInRange > room.absentCount) {
-                                    showModal('Số thí sinh vắng không hợp lệ! Vui lòng thử lại.');
-                                    return;
-                                }
+                    if (examsAdded === 0) {
+                        showModal('Không đủ bài thi để tạo túi! Vui lòng kiểm tra dữ liệu.');
+                        return;
+                    }
 
-                                if (room.absentIds.length > 0 && absentInRange !== actualAbsentInRange) {
-                                    showModal(`Cảnh báo: Số thí sinh vắng nhập vào (${absentInRange}) không khớp với danh sách mã vắng (${actualAbsentInRange}) trong đoạn ${currentId} - ${proposedEndId}!`);
-                                    return;
-                                }
+                    const endRoom = rooms[Math.min(currentRoomIndexLocal, rooms.length - 1)];
+                    let promptMessage = `Túi ${bagIndex} cần ${examsAdded} bài từ phòng ${rooms[currentRoomIndex].roomName} (mã phách ${currentId} - ${proposedEndId}). ` +
+                                       `Túi sẽ kết thúc ở phòng ${endRoom.roomName}. Trong đoạn này, có bao nhiêu thí sinh vắng? (Tổng vắng của phòng ${rooms[currentRoomIndex].roomName}: ${rooms[currentRoomIndex].absentCount})`;
+                    if (rooms[currentRoomIndex].absentIds.length > 0) {
+                        promptMessage += `\nMã phách vắng trong đoạn: ${rooms[currentRoomIndex].absentIds.filter(id => id >= currentId && id <= proposedEndId).join(', ') || 'không có'}`;
+                    }
 
-                                proposedEndId += absentInRange;
-                                if (proposedEndId > room.endId) {
-                                    showModal(`Không đủ bài thi trong phòng ${room.roomName} để bù cho số thí sinh vắng! Vui lòng kiểm tra lại.`);
-                                    return;
-                                }
-
-                                addExams();
-                            });
+                    showModal(promptMessage, true, (value) => {
+                        const inputAbsent = parseInt(value) || 0;
+                        console.log(`inputAbsent for bag ${bagIndex}: ${inputAbsent}`);
+                        if (isNaN(inputAbsent) || inputAbsent < 0 || inputAbsent > rooms[currentRoomIndex].absentCount) {
+                            showModal('Số thí sinh vắng không hợp lệ! Vui lòng thử lại.');
                             return;
                         }
 
-                        addExams();
-
-                        function addExams() {
-                            for (let id = currentId; id <= proposedEndId && currentCount < bagSize && distributedExams < totalExams; id++) {
-                                if (room.absentIds.includes(id)) {
-                                    console.log(`Skipping absent ID in room ${room.roomName}: ${id}`);
-                                    continue;
-                                }
-                                currentExams.push(id);
-                                currentCount++;
-                                validCount--;
-                                distributedExams++;
-                            }
-
-                            lastUsedId = proposedEndId;
-                            console.log(`Room ${room.roomName}: Added ${proposedEndId - currentId + 1 - absentInRange} exams, lastUsedId=${lastUsedId}, distributedExams=${distributedExams}`);
-
-                            if (currentCount >= bagSize || (distributedExams >= totalExams && currentExams.length > 0)) {
-                                bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài, từ các phòng: ${roomsUsed.join(', ')})`);
-                                currentExams = [];
-                                currentCount = 0;
-                                bagIndex++;
-                            }
-
-                            if (validCount <= 0) {
-                                currentRoomIndex++;
-                            }
-
-                            if (currentRoomIndex < rooms.length && distributedExams < totalExams && bagIndex <= expectedBags) {
-                                calculateBags();
-                            } else {
-                                finalizeBags();
-                            }
+                        if (rooms[currentRoomIndex].absentIds.length > 0 && inputAbsent !== absentInRange) {
+                            showModal(`Cảnh báo: Số thí sinh vắng nhập vào (${inputAbsent}) không khớp với danh sách mã vắng (${absentInRange}) trong đoạn ${currentId} - ${proposedEndId}!`);
+                            return;
                         }
-                    }
+
+                        // Thêm bài thi vào túi
+                        currentExams.push(...examIds);
+                        currentCount += examsAdded;
+                        distributedExams += examsAdded;
+                        lastUsedId = proposedEndId;
+
+                        console.log(`Bag ${bagIndex}: Added ${examsAdded} exams, lastUsedId=${lastUsedId}, distributedExams=${distributedExams}, currentCount=${currentCount}, roomsUsed=${Array.from(roomsUsedLocal).join(', ')}`);
+
+                        if (currentCount >= bagSize || (distributedExams >= totalExams && currentExams.length > 0)) {
+                            bagDetails.push(`Túi ${bagIndex}: ${formatBagRange(currentExams)} (${currentExams.length} bài, từ các phòng: ${Array.from(roomsUsedLocal).join(', ')})`);
+                            currentExams = [];
+                            currentCount = 0;
+                            bagIndex++;
+                            roomsUsed = new Set();
+                            currentRoomIndex = currentRoomIndexLocal;
+                        } else {
+                            roomsUsed = roomsUsedLocal;
+                            currentRoomIndex = currentRoomIndexLocal;
+                        }
+
+                        processNextBag();
+                    });
                 }
 
-                function finalizeBags() {
-                    if (currentExams.length > 0) {
-                        bagDetails.push(`Túi ${bagIndex}: ${currentExams[0]} - ${currentExams[currentExams.length - 1]} (${currentExams.length} bài, từ các phòng: ${roomsUsed.join(', ')})`);
-                    }
-
-                    console.log(`Method 1 completed: totalExams=${totalExams}, distributedExams=${distributedExams}, bags=${bagDetails.length}`);
-                    displayResults();
-                }
-
-                function displayResults() {
-                    document.getElementById('totalExams').textContent = totalExams;
-                    document.getElementById('totalBags').textContent = bagDetails.length;
-                    document.getElementById('totalAbsent').textContent = totalAbsent;
-                    document.getElementById('totalRooms').textContent = rooms.length;
-                    document.getElementById('bagDetails').innerHTML = bagDetails.map(detail => `<div class="p-2 bg-gray-100 rounded">${detail}</div>`).join('');
-                }
+                processNextBag();
+                return;
             }
 
-            document.getElementById('totalExams').textContent = totalExams;
-            document.getElementById('totalBags').textContent = bagDetails.length;
-            document.getElementById('totalAbsent').textContent = totalAbsent;
-            document.getElementById('totalRooms').textContent = document.getElementById('method1').classList.contains('hidden') ? 0 : rooms.length;
-            document.getElementById('bagDetails').innerHTML = bagDetails.map(detail => `<div class="p-2 bg-gray-100 rounded">${detail}</div>`).join('');
+            function displayResults() {
+                document.getElementById('totalExams').textContent = totalExams;
+                document.getElementById('totalBags').textContent = bagDetails.length;
+                document.getElementById('totalAbsent').textContent = totalAbsent;
+                document.getElementById('totalRooms').textContent = document.getElementById('method1').classList.contains('hidden') ? 0 : rooms.length;
+                document.getElementById('bagDetails').innerHTML = bagDetails.map(detail => `<div class="p-2 bg-gray-100 rounded">${detail}</div>`).join('');
+            }
         }
 
         function exportToText() {
